@@ -220,35 +220,61 @@ We can get an eland data frame by reading directly the csv file and load to elas
 To get started, let’s create an `eland.DataFrame` by reading a csv file. This creates and populates the `es-customers` index in the local Elasticsearch cluster.
 
 ```python
-homeed_df = ed.read_csv("/home/telcos-ecs/eland_es_analytics/customers.csv",
-                 es_client=es,
-                 es_dest_index='es-customers',
-                 es_if_exists='replace',
-                 es_dropna=True,
-                 es_refresh=True,
-                 index_col=0)
+ed_df = ed.read_csv("/home/telcos-ecs/eland_es_analytics/invoices.csv",
+                es_client=es,
+
+    # Where the data will live in Elasticsearch
+    es_dest_index="es-invoices",
+
+    # Type overrides for certain columns, this can be used to customize index mapping before ingest
+    es_type_overrides={
+        "invoice_id": "keyword",
+        "item_id": "keyword",
+        "item_model": "keyword",
+        "item_name": "keyword",     
+        "item_brand": "keyword",
+        "item_vendor": "keyword",   
+        "order_qty": "integer",
+        "invoice_date": "date",
+        "unit_price": "float",  
+        "customer_id": "keyword",
+        "country_name": "keyword",
+        "country_location": "geo_point"  
+    },
+
+    # If the index already exists what should we do?
+    es_if_exists="replace",
+
+    # Wait for data to be indexed before returning
+    es_refresh=True,
+)
 ed_df.info()
 ```
 
 ```
 <class 'eland.dataframe.DataFrame'>
-Index: 3333 entries, 0 to 3332
-Data columns (total 8 columns):
- #   Column                  Non-Null Count  Dtype 
----  ------                  --------------  ----- 
- 0   account_length          3333 non-null   int64 
- 1   churn                   3333 non-null   int64 
- 2   customer_service_calls  3333 non-null   int64 
- 3   international_plan      3333 non-null   object
- 4   number_vmail_messages   3333 non-null   int64 
- 5   phone_number            3333 non-null   object
- 6   state                   3333 non-null   object
- 7   voice_mail_plan         3333 non-null   object
-dtypes: int64(4), object(4)
+Index: 541909 entries, 1500 to 541908
+Data columns (total 12 columns):
+ #   Column            Non-Null Count   Dtype         
+---  ------            --------------   -----         
+ 0   country_location  541909 non-null  object        
+ 1   country_name      541909 non-null  object        
+ 2   customer_id       541909 non-null  object        
+ 3   invoice_date      541909 non-null  datetime64[ns]
+ 4   invoice_id        541909 non-null  object        
+ 5   item_brand        541909 non-null  object        
+ 6   item_id           541909 non-null  object        
+ 7   item_model        541909 non-null  object        
+ 8   item_name         541909 non-null  object        
+ 9   item_vendor       541909 non-null  object        
+ 10  order_qty         541909 non-null  int64         
+ 11  unit_price        541909 non-null  float64       
+dtypes: datetime64[ns](1), float64(1), int64(1), object(9)
 memory usage: 64.0 bytes
 ```
 
 Here we see that the "_id" field was used to index our data frame.
+
 ```python
 ed_df.index.es_index_field
 ```
@@ -259,8 +285,69 @@ Next, we can check which field from elasticsearch are available to our eland dat
 ```python
 ed_df.columns
 
-Index(['account_length', 'churn', 'customer_service_calls',
-       'international_plan', 'number_vmail_messages', 'phone_number', 'state',
-       'voice_mail_plan'],
+Index(['country_location', 'country_name', 'customer_id', 'invoice_date',
+       'invoice_id', 'item_brand', 'item_id', 'item_model', 'item_name',
+       'item_vendor', 'order_qty', 'unit_price'],
       dtype='object')
+```
+
+Go to Kibana `Dev Console` and check our index `es-invoices`
+
+```
+GET es-invoices/_search?track_total_hits=true&size=1
+```
+
+The response should be like
+
+```json
+{
+  "took" : 0,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 541909,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "es-invoices",
+        "_id" : "138000",
+        "_score" : 1.0,
+        "_source" : {
+          "invoice_id" : "553464",
+          "item_id" : 35310308,
+          "item_model" : "SM-J110H/DS",
+          "item_name" : "Samsung SM-J110H/DS",
+          "item_brand" : "Samsung",
+          "item_vendor" : "Samsung Korea",
+          "order_qty" : 12,
+          "invoice_date" : "2019-05-17T11:07:00",
+          "unit_price" : 16.5,
+          "customer_id" : 16218,
+          "country_name" : "Morocco",
+          "country_location" : "31.791702,-7.09262"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Boolean Indexing
+we also allow you to filter the data frame using boolean indexing. Under the hood, a boolean index maps to a terms query that is then passed to elasticsearch to filter the index.
+
+```python
+# the construction of a boolean vector maps directly to an elasticsearch query
+print(ed_invoices['country_name'] == 'Morocco')
+ed_invoices[(ed_invoices['country_name'] == 'Morocco')].head(5)
+```
+```
+{'term': {'country_name': 'Morocco'}}
 ```
