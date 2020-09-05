@@ -345,8 +345,8 @@ we also allow you to filter the data frame using boolean indexing. Under the hoo
 
 ```python
 # the construction of a boolean vector maps directly to an elasticsearch query
-print(ed_invoices['country_name'] == 'Morocco')
-ed_invoices[(ed_invoices['country_name'] == 'Morocco')].head(5)
+print(ed_df['country_name'] == 'Morocco')
+ed_df[(ed_df['country_name'] == 'Morocco')].head(5)
 ```
 ```
 {'term': {'country_name': 'Morocco'}}
